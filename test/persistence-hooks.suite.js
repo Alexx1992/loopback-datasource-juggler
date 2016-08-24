@@ -3016,12 +3016,12 @@ module.exports = function(dataSource, should, connectorCapabilities) {
         monitorHookExecution(['access', 'before save']);
 
         TestModel.observe('access', function(ctx, next) {
-          ctx.query = { where: { id: { neq: existingInstance.id }}};
+          ctx.query = { where: { id: { eq: existingInstance.id }}};
           next();
         });
 
-        TestModel.upsertWithWhere({ id: existingInstance.id },
-          { id: 'ignored', name: 'new name' },
+        TestModel.upsertWithWhere({ id: 'ignored' },
+          { name: 'new name' },
           function(err, instance) {
             if (err) return done(err);
             hookMonitor.names.should.eql(['access', 'before save']);
@@ -3087,7 +3087,7 @@ module.exports = function(dataSource, should, connectorCapabilities) {
                },
              });
              if (!dataSource.connector.upsertWithWhere) {
-               expectedContext.currentInstance = existingInstance;
+               expectedContext.currentInstance = { id: existingInstance.id, name: 'first', extra: null };
              }
              ctxRecorder.records.should.eql(expectedContext);
              done();
@@ -3102,11 +3102,14 @@ module.exports = function(dataSource, should, connectorCapabilities) {
           function(err, instance) {
             if (err) return done(err);
             var expectedContext = aCtxForModel(TestModel, {
-              where: { id: 'new-id' },
-              data: { id: 'new-id', name: 'a name' },
             });
-            if (!dataSource.connector.upsertWithWhere) {
-              ctxRecorder.records.should.eql(expectedContext.isNewInstance = true);
+
+            if (dataSource.connector.upsertWithWhere) {
+              expectedContext.data = { id: 'new-id', name: 'a name' };
+              expectedContext.where = { id: 'new-id' };
+            } else {
+              expectedContext.instance = { id: 'new-id', name: 'a name', extra: null };
+              expectedContext.isNewInstance = true;
             }
             ctxRecorder.records.should.eql(expectedContext);
             done();
@@ -3178,7 +3181,7 @@ module.exports = function(dataSource, should, connectorCapabilities) {
           { id: 'new-id', name: 'a name' },
           function(err, instance) {
             if (err) return done(err);
-            ctxRecorder.records.should.eql(aCtxForModel(TestModel, {
+            var expectedContext = aCtxForModel(TestModel, {
               where: { id: 'new-id' },
               data: { id: 'new-id', name: 'a name' },
               currentInstance: {
@@ -3186,7 +3189,13 @@ module.exports = function(dataSource, should, connectorCapabilities) {
                 name: 'a name',
                 extra: undefined,
               },
-            }));
+            });
+
+            if (dataSource.connector.upsertWithWhere) {
+              expectedContext.where = {
+                id: 'new-id',
+              };
+            }
             done();
           });
       });
@@ -3240,13 +3249,17 @@ module.exports = function(dataSource, should, connectorCapabilities) {
           { id: existingInstance.id, name: 'updated name' },
           function(err, instance) {
             if (err) return done(err);
-            ctxRecorder.records.should.eql(aCtxForModel(TestModel, {
+            var expectedContext = aCtxForModel(TestModel, {
               data: {
                 id: existingInstance.id,
                 name: 'updated name',
               },
-              isNewInstance: false,
-            }));
+            });
+
+            if (dataSource.connector.upsertWithWhere) {
+              expectedContext.isNewInstance = false;
+            }
+            ctxRecorder.records.should.eql(aCtxForModel(TestModel, expectedContext));
             done();
           });
       });
